@@ -1380,7 +1380,8 @@ test_CS104_MasterSlave_CreateDestroyLoop(void)
 	CS104_Slave slave = NULL;
 	CS104_Connection con = NULL;
 
-	for (int i = 0; i < 1000; i++) {
+  int i;
+	for (i = 0; i < 1000; i++) {
 		slave = CS104_Slave_create(100, 100);
 
 		TEST_ASSERT_NOT_NULL(slave);
