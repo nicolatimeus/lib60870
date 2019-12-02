@@ -504,7 +504,7 @@ test_CS104SlaveEventQueue1()
 
     int i;
 
-    for (int i = 0; i < 15; i++) {
+    for (i = 0; i < 15; i++) {
         CS101_ASDU newAsdu = CS101_ASDU_create(alParams, false, CS101_COT_SPONTANEOUS, 0, 1, false, false);
 
         InformationObject io = (InformationObject) MeasuredValueScaled_create(NULL, 110, scaledValue, IEC60870_QUALITY_GOOD);
@@ -540,7 +540,7 @@ test_CS104SlaveEventQueue1()
 
     CS104_Connection_sendStartDT(con);
 
-    for (int i = 0; i < 15; i++) {
+    for (i = 0; i < 15; i++) {
         CS101_ASDU newAsdu = CS101_ASDU_create(alParams, false, CS101_COT_SPONTANEOUS, 0, 1, false, false);
 
         InformationObject io = (InformationObject) MeasuredValueScaled_create(NULL, 110, scaledValue, IEC60870_QUALITY_GOOD);
@@ -598,7 +598,7 @@ test_CS104SlaveEventQueueOverflow()
 
     int i;
 
-    for (int i = 0; i < 300; i++) {
+    for (i = 0; i < 300; i++) {
         CS101_ASDU newAsdu = CS101_ASDU_create(alParams, false, CS101_COT_SPONTANEOUS, 0, 1, false, false);
 
         InformationObject io = (InformationObject) MeasuredValueScaled_create(NULL, 110, scaledValue, IEC60870_QUALITY_GOOD);
@@ -639,7 +639,7 @@ test_CS104SlaveEventQueueOverflow()
 
     CS104_Connection_sendStartDT(con);
 
-    for (int i = 0; i < 150; i++) {
+    for (i = 0; i < 150; i++) {
         CS101_ASDU newAsdu = CS101_ASDU_create(alParams, false, CS101_COT_SPONTANEOUS, 0, 1, false, false);
 
         InformationObject io = (InformationObject) MeasuredValueScaled_create(NULL, 110, scaledValue, IEC60870_QUALITY_GOOD);
@@ -691,7 +691,7 @@ test_CS104SlaveEventQueueOverflow2()
 
     int i;
 
-    for (int i = 0; i < 300; i++) {
+    for (i = 0; i < 300; i++) {
         CS101_ASDU newAsdu = CS101_ASDU_create(alParams, false, CS101_COT_SPONTANEOUS, 0, 1, false, false);
 
         InformationObject io = (InformationObject) MeasuredValueScaled_create(NULL, 110, scaledValue, IEC60870_QUALITY_GOOD);
@@ -734,7 +734,7 @@ test_CS104SlaveEventQueueOverflow2()
 
     int typeNo = 0;
 
-    for (int i = 0; i < 20000; i++) {
+    for (i = 0; i < 20000; i++) {
         CS101_ASDU newAsdu = CS101_ASDU_create(alParams, false, CS101_COT_SPONTANEOUS, 0, 1, false, false);
 
         InformationObject io;
