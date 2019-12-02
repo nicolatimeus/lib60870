@@ -104,7 +104,6 @@ struct sMessageQueueEntryInfo {
 
 struct sMessageQueue {
     int size;
-    int entryCounter;
 
     uint8_t* firstEntry;
     uint8_t* lastEntry;
@@ -128,8 +127,6 @@ MessageQueue_initialize(MessageQueue self, int maxQueueSize)
     self->buffer = (uint8_t*) GLOBAL_CALLOC(1, self->size);
 
     DEBUG_PRINT("event queue buffer size: %i bytes\n", self->size);
-
-    self->entryCounter = 0;
 
     self->firstEntry = NULL;
     self->lastEntry = NULL;
@@ -182,7 +179,6 @@ MessageQueue_unlock(MessageQueue self)
 #endif
 }
 
-
 /**
  * Add an ASDU to the queue. When queue is full, override oldest entry.
  */
@@ -206,7 +202,7 @@ MessageQueue_enqueueASDU(MessageQueue self, CS101_ASDU asdu)
 
     uint8_t* nextMsgPtr;
 
-    if (self->entryCounter == 0) {
+    if (self->firstEntry == NULL) {
         self->firstEntry = self->buffer;
         self->lastInBufferEntry = self->firstEntry;
         nextMsgPtr = self->buffer;
@@ -214,21 +210,10 @@ MessageQueue_enqueueASDU(MessageQueue self, CS101_ASDU asdu)
     else {
         memcpy(&entryInfo, self->lastEntry, sizeof(struct sMessageQueueEntryInfo));
         nextMsgPtr = self->lastEntry + sizeof(struct sMessageQueueEntryInfo) + entryInfo.size;
-    }
 
-    if (nextMsgPtr + entrySize > self->buffer + self->size) {
-        nextMsgPtr = self->buffer;
-        self->lastInBufferEntry = self->lastEntry;
-    }
-
-    if (self->entryCounter > 0) {
-
-        if (nextMsgPtr <= self->firstEntry) {
-
-            /* remove old entries until we have enough space for the new ASDU */
-            while ((nextMsgPtr + entrySize > self->firstEntry) && (self->entryCounter > 0)) {
-            	if (self->firstEntry != self->lastEntry) {
-
+        do {
+            while (nextMsgPtr + entrySize > self->firstEntry && nextMsgPtr <= self->firstEntry) {
+                if (self->firstEntry != self->lastEntry) {
                     if (self->firstEntry != self->lastInBufferEntry) {
                         memcpy(&entryInfo, self->firstEntry, sizeof(struct sMessageQueueEntryInfo));
                         self->firstEntry = self->firstEntry + sizeof(struct sMessageQueueEntryInfo) + entryInfo.size;
@@ -236,27 +221,29 @@ MessageQueue_enqueueASDU(MessageQueue self, CS101_ASDU asdu)
                     else {
                         self->firstEntry = self->buffer;
                         memcpy(&entryInfo, self->firstEntry, sizeof(struct sMessageQueueEntryInfo));
-
-                        self->entryCounter--;
-                        break;
+                        self->lastInBufferEntry = self->lastEntry;
                     }
-
-                    self->entryCounter--;
                 }
                 else {
-                    self->firstEntry = nextMsgPtr;
-                    self->lastInBufferEntry = nextMsgPtr;
-                    self->entryCounter = 0;
+                  self->firstEntry = self->buffer;
+                  self->lastInBufferEntry = self->firstEntry;
+                  nextMsgPtr = self->buffer;
+                  break;
                 }
             }
-        }
-        else {
-            self->lastInBufferEntry = nextMsgPtr;
-        }
+
+            if (nextMsgPtr + entrySize >= self->buffer + self->size) {
+                nextMsgPtr = self->buffer;
+                continue;
+            }
+        } while (false);
+    }
+
+    if (nextMsgPtr > self->firstEntry) {
+        self->lastInBufferEntry = nextMsgPtr;
     }
 
     self->lastEntry = nextMsgPtr;
-    self->entryCounter++;
 
     struct sBufferFrame bufferFrame;
 
@@ -269,7 +256,7 @@ MessageQueue_enqueueASDU(MessageQueue self, CS101_ASDU asdu)
 
     memcpy(nextMsgPtr, &entryInfo, sizeof(struct sMessageQueueEntryInfo));
 
-    DEBUG_PRINT("ASDUs in FIFO: %i (new(size=%i/%i): %p, first: %p, last: %p lastInBuf: %p)\n", self->entryCounter, entrySize, asduSize, nextMsgPtr,
+    DEBUG_PRINT("ASDUs in FIFO: (new(size=%i/%i): %p, first: %p, last: %p lastInBuf: %p)\n", entrySize, asduSize, nextMsgPtr,
             self->firstEntry, self->lastEntry, self->lastInBufferEntry);
 
 #if (CONFIG_USE_SEMAPHORES == 1)
@@ -286,7 +273,7 @@ MessageQueue_isAsduAvailable(MessageQueue self)
 
     bool retVal;
 
-    if (self->entryCounter > 0)
+    if (self->firstEntry != NULL)
         retVal = true;
     else
         retVal = false;
@@ -304,7 +291,7 @@ MessageQueue_getNextWaitingASDU(MessageQueue self, uint64_t* entryId, uint8_t** 
     /* TODO optimize - maybe not required to loop the whole buffer! */
     uint8_t* buffer = NULL;
 
-    if (self->entryCounter != 0) {
+    if (self->firstEntry != NULL) {
 
         uint8_t* entryPtr = self->firstEntry;
 
@@ -349,7 +336,7 @@ MessageQueue_setWaitingForTransmissionWhenNotConfirmed(MessageQueue self)
     Semaphore_wait(self->queueLock);
 #endif
 
-    if (self->entryCounter != 0) {
+    if (self->firstEntry != NULL) {
 
         uint8_t* entryPtr = self->firstEntry;
 
@@ -390,7 +377,6 @@ MessageQueue_releaseAllQueuedASDUs(MessageQueue self)
     self->firstEntry = NULL;
     self->lastEntry = NULL;
     self->lastInBufferEntry = NULL;
-    self->entryCounter = 0;
 
 #if (CONFIG_USE_SEMAPHORES == 1)
     Semaphore_post(self->queueLock);
@@ -404,19 +390,19 @@ MessageQueue_markAsduAsConfirmed(MessageQueue self, uint8_t* queueEntry, uint64_
     Semaphore_wait(self->queueLock);
 #endif
 
-    if (self->entryCounter > 0) {
+    if (self->firstEntry != NULL) {
 
-        /* entryId plausibility check */
-        int64_t entryIdDiff = self->entryId - entryId;
+        struct sMessageQueueEntryInfo entryInfo;
+        memcpy(&entryInfo, self->firstEntry, sizeof(struct sMessageQueueEntryInfo));
 
-        if (entryIdDiff <= self->entryCounter) {
+        if (entryId >= entryInfo.entryId) {
 
-            struct sMessageQueueEntryInfo entryInfo;
             memcpy(&entryInfo, queueEntry, sizeof(struct sMessageQueueEntryInfo));
 
-            /* check if ASDU is matching */
+            /* check if ASDU is matching, should not be necessary but better check twice */
             if (entryInfo.entryId == entryId) {
                 entryInfo.entryState = QUEUE_ENTRY_STATE_NOT_USED_OR_CONFIRMED;
+                memcpy(queueEntry, &entryInfo, sizeof(struct sMessageQueueEntryInfo));
             }
         }
     }
