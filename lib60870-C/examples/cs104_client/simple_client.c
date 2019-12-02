@@ -50,12 +50,48 @@ connectionHandler (void* parameter, CS104_Connection connection, CS104_Connectio
 static bool
 asduReceivedHandler (void* parameter, int address, CS101_ASDU asdu)
 {
+    static int16_t old = 0;
+    static bool started = false;
+
     printf("RECVD ASDU type: %s(%i) elements: %i\n",
             TypeID_toString(CS101_ASDU_getTypeID(asdu)),
             CS101_ASDU_getTypeID(asdu),
             CS101_ASDU_getNumberOfElements(asdu));
 
-    if (CS101_ASDU_getTypeID(asdu) == M_ME_TE_1) {
+    if (CS101_ASDU_getTypeID(asdu) == M_ME_NB_1) {
+
+        printf("  measured scaled values:\n");
+
+        int i;
+
+        for (i = 0; i < CS101_ASDU_getNumberOfElements(asdu); i++) {
+
+            MeasuredValueScaled io =
+                    (MeasuredValueScaled) CS101_ASDU_getElement(asdu, i);
+
+            /*printf("    IOA: %i value: %i\n",
+                    InformationObject_getObjectAddress((InformationObject) io),
+                    MeasuredValueScaled_getValue(io)
+            );*/
+
+
+            if (CS101_ASDU_getCOT(asdu) == CS101_COT_SPONTANEOUS) {
+              int16_t received = MeasuredValueScaled_getValue(io);
+
+              if (received != old + 1) {
+                printf("\n\n\nout of order, prev: %i next: %i\n\n\n", old, received);
+                if (started) {
+                  exit(1);
+                }
+                started = true;
+              }
+
+              old = received;
+            }
+
+            MeasuredValueScaled_destroy(io);
+        }
+    } else if (CS101_ASDU_getTypeID(asdu) == M_ME_TE_1) {
 
         printf("  measured scaled values with CP56Time2a timestamp:\n");
 
@@ -153,11 +189,11 @@ main(int argc, char** argv)
     else
         printf("Connect failed!\n");
 
-    Thread_sleep(1000);
+    while (true) {
+       Thread_sleep(100000);
+    }
 
     CS104_Connection_destroy(con);
 
     printf("exit\n");
 }
-
-

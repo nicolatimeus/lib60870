@@ -9,6 +9,8 @@
 #include "hal_thread.h"
 #include "hal_time.h"
 
+#include <stdlib.h>
+
 static bool running = true;
 
 void
@@ -207,7 +209,7 @@ main(int argc, char** argv)
     /* create a new slave/server instance with default connection parameters and
      * default message queue size (will provide space for 100 messages of the maximum
      * message size or more messages for smaller messages */
-    CS104_Slave slave = CS104_Slave_create(100, 100);
+    CS104_Slave slave = CS104_Slave_create(20, 20);
 
     CS104_Slave_setLocalAddress(slave, "0.0.0.0");
 
@@ -244,30 +246,39 @@ main(int argc, char** argv)
         goto exit_program;
     }
 
+    int16_t delay = 1;
     int16_t scaledValue = 0;
 
-    uint64_t nextSendTime = Hal_getTimeInMs() + 1000;
+    uint64_t nextSendTime = Hal_getTimeInMs() + delay;
+
+    printf("running\n");
 
     while (running) {
 
         CS104_Slave_tick(slave);
 
-        if (Hal_getTimeInMs() >= nextSendTime) {
+        if (Hal_getTimeInMs() > nextSendTime) {
+            for (int i = 0; i < rand() % 20; i++) {
 
-            nextSendTime += 1000;
+              CS101_ASDU asdu = CS101_ASDU_create(alParams, false, CS101_COT_PERIODIC, 0, 1, false, false);
 
-            CS101_ASDU newAsdu = CS101_ASDU_initializeStatic(&_asdu, alParams, false, CS101_COT_PERIODIC, 0, 1, false, false);
+              for (int i = 0; i < rand() % 10; i++) {
+                    MeasuredValueScaled scaled = MeasuredValueScaled_create(NULL, 110, scaledValue, IEC60870_QUALITY_GOOD);
 
-            scaledValue++;
+                    scaledValue++;
 
-            CS101_ASDU_addInformationObject(newAsdu,
-                    (InformationObject) MeasuredValueScaled_create((MeasuredValueScaled)&ioBuf, 110, scaledValue, IEC60870_QUALITY_GOOD));
+                    CS101_ASDU_addInformationObject(asdu,
+                            (InformationObject) scaled);
 
-            /* Add ASDU to slave event queue - don't release the ASDU afterwards!
-             * The ASDU will be released by the Slave instance when the ASDU
-             * has been sent.
-             */
-            CS104_Slave_enqueueASDU(slave, newAsdu);
+                    InformationObject_destroy((InformationObject) scaled);
+              }
+
+              CS104_Slave_enqueueASDU(slave, asdu);
+
+              CS101_ASDU_destroy(asdu);
+            }
+
+            nextSendTime = Hal_getTimeInMs() + delay;
         }
 
         Thread_sleep(1);
